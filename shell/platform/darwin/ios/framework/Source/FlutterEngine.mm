@@ -531,7 +531,9 @@ static constexpr int kNumProfilerSamplesPerSec = 5;
                                   std::move(platformData),  // window data
                                   std::move(settings),      // settings
                                   on_create_platform_view,  // platform view creation
-                                  on_create_rasterizer      // rasterzier creation
+                                  on_create_rasterizer,      // rasterzier creation
+                                  [UIApplication sharedApplication].applicationState !=
+                                      UIApplicationStateActive
   );
 
   if (_shell == nullptr) {
@@ -545,7 +547,6 @@ static constexpr int kNumProfilerSamplesPerSec = 5;
     }
     _publisher.reset([[FlutterObservatoryPublisher alloc] init]);
     [self maybeSetupPlatformViewChannels];
-    _shell->GetIsGpuDisabledSyncSwitch()->SetSwitch(_isGpuDisabled ? true : false);
     if (profilerEnabled) {
       [self startProfiler:threadLabel];
     }

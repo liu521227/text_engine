@@ -47,14 +47,15 @@ std::unique_ptr<Shell> Shell::CreateShellOnPlatformThread(
     Settings settings,
     fml::RefPtr<const DartSnapshot> isolate_snapshot,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
-    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer) {
+    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+                        bool is_gpu_disabled) {
   if (!task_runners.IsValid()) {
     FML_LOG(ERROR) << "Task runners to run the shell were invalid.";
     return nullptr;
   }
 
   auto shell =
-      std::unique_ptr<Shell>(new Shell(std::move(vm), task_runners, settings));
+      std::unique_ptr<Shell>(new Shell(std::move(vm), task_runners, settings, is_gpu_disabled));
 
   // Create the rasterizer on the raster thread.
   std::promise<std::unique_ptr<Rasterizer>> rasterizer_promise;
@@ -241,12 +242,14 @@ std::unique_ptr<Shell> Shell::Create(
     TaskRunners task_runners,
     Settings settings,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
-    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer) {
+    const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
+                                     bool is_gpu_disabled) {
   return Shell::Create(std::move(task_runners),                    //
                        PlatformData{/* default platform data */},  //
                        std::move(settings),                        //
                        std::move(on_create_platform_view),         //
-                       std::move(on_create_rasterizer)             //
+                       std::move(on_create_rasterizer),
+                       is_gpu_disabled             //
   );
 }
 
@@ -255,7 +258,8 @@ std::unique_ptr<Shell> Shell::Create(
     const PlatformData platform_data,
     Settings settings,
     Shell::CreateCallback<PlatformView> on_create_platform_view,
-    Shell::CreateCallback<Rasterizer> on_create_rasterizer) {
+    Shell::CreateCallback<Rasterizer> on_create_rasterizer,
+                                     bool is_gpu_disabled) {
   PerformInitializationTasks(settings);
   PersistentCache::SetCacheSkSL(settings.cache_sksl);
 
@@ -272,7 +276,8 @@ std::unique_ptr<Shell> Shell::Create(
                        vm_data->GetIsolateSnapshot(),  // isolate snapshot
                        on_create_platform_view,        //
                        on_create_rasterizer,           //
-                       std::move(vm)                   //
+                       std::move(vm),
+                       is_gpu_disabled                 //
   );
 }
 
@@ -283,7 +288,7 @@ std::unique_ptr<Shell> Shell::Create(
     fml::RefPtr<const DartSnapshot> isolate_snapshot,
     const Shell::CreateCallback<PlatformView>& on_create_platform_view,
     const Shell::CreateCallback<Rasterizer>& on_create_rasterizer,
-    DartVMRef vm) {
+    DartVMRef vm, bool is_gpu_disabled) {
   PerformInitializationTasks(settings);
   PersistentCache::SetCacheSkSL(settings.cache_sksl);
 
@@ -306,7 +311,7 @@ std::unique_ptr<Shell> Shell::Create(
                          settings,                                        //
                          isolate_snapshot = std::move(isolate_snapshot),  //
                          on_create_platform_view,                         //
-                         on_create_rasterizer                             //
+                         on_create_rasterizer, is_gpu_disabled                             //
   ]() mutable {
         shell = CreateShellOnPlatformThread(std::move(vm),
                                             std::move(task_runners),      //
@@ -314,7 +319,7 @@ std::unique_ptr<Shell> Shell::Create(
                                             settings,                     //
                                             std::move(isolate_snapshot),  //
                                             on_create_platform_view,      //
-                                            on_create_rasterizer          //
+                                            on_create_rasterizer, is_gpu_disabled          //
         );
         latch.Signal();
       }));
@@ -322,11 +327,11 @@ std::unique_ptr<Shell> Shell::Create(
   return shell;
 }
 
-Shell::Shell(DartVMRef vm, TaskRunners task_runners, Settings settings)
+Shell::Shell(DartVMRef vm, TaskRunners task_runners, Settings settings,bool is_gpu_disabled)
     : task_runners_(std::move(task_runners)),
       settings_(std::move(settings)),
       vm_(std::move(vm)),
-      is_gpu_disabled_sync_switch_(new fml::SyncSwitch()),
+      is_gpu_disabled_sync_switch_(new fml::SyncSwitch(is_gpu_disabled)),
       weak_factory_gpu_(nullptr),
       weak_factory_(this) {
   FML_CHECK(vm_) << "Must have access to VM to create a shell.";
